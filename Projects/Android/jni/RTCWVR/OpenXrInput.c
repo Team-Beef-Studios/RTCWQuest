@@ -480,6 +480,44 @@ static void TBXR_SyncActions( void )
     }
 }
 
+void TBXR_ProcessHaptics(void)
+{
+    if (gAppState.Session == XR_NULL_HANDLE) {
+        return;
+    }
+
+    for (int hand = 0; hand < SIDE_COUNT; hand++) {
+        float duration = 0.0f;
+        float intensity = 0.0f;
+
+        TBXR_GetHapticState(hand, &duration, &intensity);
+
+        if (duration <= 0.0f || intensity <= 0.0f) {
+            continue;
+        }
+
+        XrHapticVibration vibration = {0};
+        vibration.type = XR_TYPE_HAPTIC_VIBRATION;
+        vibration.next = NULL;
+        vibration.amplitude = intensity;
+        vibration.duration = XR_MIN_HAPTIC_DURATION;
+        vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
+
+        XrHapticActionInfo info = {0};
+        info.type = XR_TYPE_HAPTIC_ACTION_INFO;
+        info.next = NULL;
+        info.action = vibrateAction;
+        info.subactionPath = handSubactionPath[hand];
+
+        xrApplyHapticFeedback(
+                gAppState.Session,
+                &info,
+                (const XrHapticBaseHeader *)&vibration);
+
+        TBXR_ClearHapticState(hand);
+    }
+}
+
 static void TBXR_CheckControllers(void)
 {
     if (!gAppState.controllersPresent)
