@@ -75,6 +75,8 @@ static jmethodID android_haptic_endframe;
 static jmethodID android_haptic_enable;
 static jmethodID android_haptic_disable;
 
+static void RTCWVR_JniShutdown(void);
+
 static char **argv;
 static int argc;
 static long long frameIndex;
@@ -139,9 +141,14 @@ static int ParseCommandLine(char *cmdline, char **outArgv)
 
 static void *RTCWVR_AppThread(void *parm)
 {
-	(void)parm;
-	VR_main(argc, argv);
-	return NULL;
+    (void)parm;
+
+    VR_main(argc, argv);
+
+    TBXR_DestroySessionForReinit();
+    RTCWVR_JniShutdown();
+
+    return NULL;
 }
 
 static void RTCWVR_InitCvars(void)
@@ -186,6 +193,17 @@ static JNIEnv *GetJniEnv(void)
 		(*jVM)->AttachCurrentThread(jVM, &env, NULL);
 	}
 	return env;
+}
+
+static void RTCWVR_JniShutdown(void)
+{
+    JNIEnv *env = GetJniEnv();
+
+    if (!env || !jniCallbackObj || !android_shutdown) {
+        return;
+    }
+
+    (*env)->CallVoidMethod(env, jniCallbackObj, android_shutdown);
 }
 
 static qboolean RTCWVR_WaitForAndroidSurface(void)
