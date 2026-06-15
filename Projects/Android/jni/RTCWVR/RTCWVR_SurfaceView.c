@@ -145,7 +145,6 @@ static void *RTCWVR_AppThread(void *parm)
 
     VR_main(argc, argv);
 
-    TBXR_DestroySessionForReinit();
     RTCWVR_JniShutdown();
 
     return NULL;
