@@ -293,6 +293,8 @@ void VR_HapticEndFrame();
 void VR_HapticStopEvent(const char* event);
 void VR_HapticEnable();
 void VR_HapticDisable();
+void TBXR_GetHapticState(int hand, float *duration, float *intensity);
+void TBXR_ClearHapticState(int hand);
 
 // Engine glue provided by EFXR_SurfaceView.c
 void EFXR_GetScreenResolution(int *width, int *height);
