@@ -1642,10 +1642,37 @@ now live in OpenXrInput.c.
 ================================================================================
 */
 
-void TBXR_Vibrate( int duration, int chan, float intensity )
+static float tbxrHapticDuration[2] = { 0.0f, 0.0f };
+static float tbxrHapticIntensity[2] = { 0.0f, 0.0f };
+
+void TBXR_Vibrate(int duration, int chan, float intensity)
 {
+    if (chan < 0 || chan > 1) {
+        return;
+    }
+
+    tbxrHapticDuration[chan] = (float)duration;
+    tbxrHapticIntensity[chan] = intensity;
 }
 
-void TBXR_ProcessHaptics()
+void TBXR_GetHapticState(int hand, float *duration, float *intensity)
 {
+    if (hand < 0 || hand > 1) {
+        *duration = 0.0f;
+        *intensity = 0.0f;
+        return;
+    }
+
+    *duration = tbxrHapticDuration[hand];
+    *intensity = tbxrHapticIntensity[hand];
+}
+
+void TBXR_ClearHapticState(int hand)
+{
+    if (hand < 0 || hand > 1) {
+        return;
+    }
+
+    tbxrHapticDuration[hand] = 0.0f;
+    tbxrHapticIntensity[hand] = 0.0f;
 }
