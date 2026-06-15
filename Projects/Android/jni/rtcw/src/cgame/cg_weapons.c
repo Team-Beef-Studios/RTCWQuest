@@ -2877,12 +2877,23 @@ qboolean CG_MonsterUsingWeapon( centity_t *cent, int aiChar, int weaponNum ) {
 CG_CalcMuzzlePoint
 ======================
 */
+static qboolean cgVRLocalMuzzleValid = qfalse;
+static int cgVRLocalMuzzleFrame = -1;
+static vec3_t cgVRLocalMuzzleOrigin;
+static vec3_t cgVRLocalMuzzleForward;
+
 static qboolean CG_CalcMuzzlePoint( int entityNum, int dist, vec3_t muzzle ) {
     vec3_t forward, right, up;
     centity_t   *cent;
     int anim;
     cent = &cg_entities[entityNum];
     if ( cg.snap && entityNum == cg.snap->ps.clientNum && cgVR && !cgVR->screen && !cgVR->cin_camera && !cg.cameraMode ) {
+        if ( cgVRLocalMuzzleValid && cgVRLocalMuzzleFrame >= cg.clientFrame - 1 ) {
+            VectorCopy( cgVRLocalMuzzleOrigin, muzzle );
+            VectorMA( muzzle, dist, cgVRLocalMuzzleForward, muzzle );
+            return qtrue;
+        }
+
         vec3_t angles;
         int weapon = cg.predictedPlayerState.weapon;
         qboolean akimbo = qfalse;
@@ -3327,6 +3338,14 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
         MatrixMultiply( flash.axis, gun.axis, flash.axis );
 
     }
+
+	if ( isPlayer && ps && cgVR && !cgVR->screen && !cgVR->cin_camera ) {
+		VectorCopy( flash.origin, cgVRLocalMuzzleOrigin );
+		VectorCopy( flash.axis[0], cgVRLocalMuzzleForward );
+		VectorNormalize( cgVRLocalMuzzleForward );
+		cgVRLocalMuzzleFrame = cg.clientFrame;
+		cgVRLocalMuzzleValid = qtrue;
+	}
 
 	// store this position for other cgame elements to access
 	cent->pe.gunRefEnt = gun;
@@ -5213,11 +5232,9 @@ void CG_SetSniperZoom( int lastweap, int newweap ) {
         case WP_SNIPERRIFLE:
         case WP_SNOOPERSCOPE:
         case WP_FG42SCOPE:
-        	Com_Printf("**WEAPON EVENT**  cgVR->scopeengaged = qtrue");
             cgVR->scopeengaged = qtrue;
             break;
         default:
-			Com_Printf("**WEAPON EVENT**  cgVR->scopeengaged = qfalse");
 			cgVR->scopeengaged = qfalse;
 			trap_Haptic(1, cgVR->right_handed ? 1 : 0, 0.7f, "switch_weapon", 0.0f, 0.0f);
             break;

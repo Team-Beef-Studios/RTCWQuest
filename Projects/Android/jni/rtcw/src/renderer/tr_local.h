@@ -471,6 +471,7 @@ typedef struct dlight_s {
 // as well as the locally generated scene information
 typedef struct {
 	int x, y, width, height;
+	qboolean override_fov;
 	float fov_x, fov_y;
 	vec3_t vieworg;
 	vec3_t viewangles;

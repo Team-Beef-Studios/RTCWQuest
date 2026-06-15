@@ -12,6 +12,7 @@ typedef struct {
     float  fov;
     float  fov_x;
     float  fov_y;
+    int    cgzoommode;
     int    eye;
     float  off_center_fov_x[2];
     float  off_center_fov_y[2];

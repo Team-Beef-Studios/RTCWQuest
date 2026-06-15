@@ -1035,8 +1035,8 @@ void R_Register( void ) {
 	r_picmip = ri.Cvar_Get( "r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_picmip2 = ri.Cvar_Get( "r_picmip2", "0", CVAR_ARCHIVE | CVAR_LATCH );   // used for character skins picmipping at a different level from the rest of the game
 	r_roundImagesDown = ri.Cvar_Get( "r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH );
-	r_lowMemTextureSize = ri.Cvar_Get( "r_lowMemTextureSize", "512", CVAR_ARCHIVE | CVAR_LATCH );
-	r_lowMemTextureThreshold = ri.Cvar_Get( "r_lowMemTextureThreshold", "15.0", CVAR_ARCHIVE | CVAR_LATCH );
+	r_lowMemTextureSize = ri.Cvar_Get( "r_lowMemTextureSize", "0", CVAR_ARCHIVE | CVAR_LATCH );
+	r_lowMemTextureThreshold = ri.Cvar_Get( "r_lowMemTextureThreshold", "0.0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_rmse = ri.Cvar_Get( "r_rmse", "0.0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_colorMipLevels = ri.Cvar_Get( "r_colorMipLevels", "0", CVAR_LATCH );
 	AssertCvarRange( r_picmip, 0, 16, qtrue );

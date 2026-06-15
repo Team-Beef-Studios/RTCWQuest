@@ -60,7 +60,26 @@ void CG_AdjustFrom640( float *x, float *y, float *w, float *h ) {
 	}
 	// -NERVE - SMF
 
-	if (hudflags & HUD_ZOOMED_CROSSHAIR)
+	if (hudflags & HUD_FLAGS_OPTICAL_CENTER)
+	{
+		float xoffset = 0.0f;
+		float yoffset = 0.0f;
+		int eye = cgVR ? cgVR->eye : 0;
+
+		if ( eye < 0 || eye > 1 ) {
+			eye = 0;
+		}
+		if ( cgVR ) {
+			xoffset = cgVR->off_center_fov_x[eye] * 640.0f;
+			yoffset = -cgVR->off_center_fov_y[eye] * 480.0f;
+		}
+
+		*x = ( *x + xoffset ) * cgs.screenXScale;
+		*y = ( *y + yoffset ) * cgs.screenYScale;
+		*w *= cgs.screenXScale;
+		*h *= cgs.screenYScale;
+	}
+	else if (hudflags & HUD_ZOOMED_CROSSHAIR)
 	{
 		float screenXScale = cgs.screenXScale / 1.7f;
 		float screenYScale = cgs.screenYScale / 1.7f;

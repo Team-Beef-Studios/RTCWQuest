@@ -2046,6 +2046,30 @@ CROSSHAIRS
 CG_DrawWeapReticle
 ==============
 */
+static void CG_DrawOpticalReticleMask( float x, float y, float w, float h, const float *color ) {
+	float screenWidth = cgs.glconfig.vidWidth;
+	float screenHeight = cgs.glconfig.vidHeight;
+	float right = x + w;
+	float bottom = y + h;
+
+	trap_R_SetColor( color );
+
+	if ( x > 0.0f ) {
+		trap_R_DrawStretchPic( 0, 0, x, screenHeight, 0, 0, 0, 1, cgs.media.whiteShader );
+	}
+	if ( right < screenWidth ) {
+		trap_R_DrawStretchPic( right, 0, screenWidth - right, screenHeight, 0, 0, 0, 1, cgs.media.whiteShader );
+	}
+	if ( y > 0.0f ) {
+		trap_R_DrawStretchPic( x, 0, w, y, 0, 0, 0, 1, cgs.media.whiteShader );
+	}
+	if ( bottom < screenHeight ) {
+		trap_R_DrawStretchPic( x, bottom, w, screenHeight - bottom, 0, 0, 0, 1, cgs.media.whiteShader );
+	}
+
+	trap_R_SetColor( NULL );
+}
+
 static void CG_DrawWeapReticle( void ) {
 	int weap;
 	vec4_t color = {0, 0, 0, 1};
@@ -2060,8 +2084,6 @@ static void CG_DrawWeapReticle( void ) {
 	float snooperBrightness;
 	float x = (X_WIDTH * indent), y = (Y_HEIGHT * indent), w = (X_WIDTH * (1-(2*indent))) / 2.0f, h = (Y_HEIGHT * (1-(2*indent))) / 2;
 
-	CG_AdjustFrom640( &x, &y, &w, &h );
-
 	weap = cg.weaponSelect;
 
 	// DHM - Nerve :: So that we will draw reticle
@@ -2070,12 +2092,9 @@ static void CG_DrawWeapReticle( void ) {
 	}
 
 
-    // sides
-    CG_FillRect( 0, 0, (X_WIDTH * indent), Y_HEIGHT, color );
-    CG_FillRect( X_WIDTH * (1 - indent), 0, (X_WIDTH * indent), Y_HEIGHT, color );
-    // top/bottom
-    CG_FillRect( X_WIDTH * indent, 0, X_WIDTH * (1-indent), Y_HEIGHT * indent, color );
-    CG_FillRect( X_WIDTH * indent, Y_HEIGHT * (1-indent), X_WIDTH * (1-indent), Y_HEIGHT * indent, color );
+	hudflags |= HUD_FLAGS_OPTICAL_CENTER;
+	CG_AdjustFrom640( &x, &y, &w, &h );
+	CG_DrawOpticalReticleMask( x, y, w * 2.0f, h * 2.0f, color );
 
     if ( weap == WP_SNIPERRIFLE ) {
 		// center
@@ -2087,12 +2106,10 @@ static void CG_DrawWeapReticle( void ) {
 		}
 
 		// hairs
-		hudflags |= HUD_ZOOMED_CROSSHAIR;
 		CG_FillRect( 84, 239, 177, 2, color );   // left
 		CG_FillRect( 320, 242, 1, 58, color );   // center top
 		CG_FillRect( 319, 300, 2, 178, color );  // center bot
 		CG_FillRect( 380, 239, 177, 2, color );  // right
-		hudflags &= ~HUD_ZOOMED_CROSSHAIR;
 	} else if ( weap == WP_SNOOPERSCOPE ) {
 
 		// center
@@ -2112,7 +2129,6 @@ static void CG_DrawWeapReticle( void ) {
 
 		// hairs
 
-		hudflags |= HUD_ZOOMED_CROSSHAIR;
 		CG_FillRect( 310, 120, 20, 1, color );   //					-----
 		CG_FillRect( 300, 160, 40, 1, color );   //				-------------
 		CG_FillRect( 310, 200, 20, 1, color );   //					-----
@@ -2130,7 +2146,6 @@ static void CG_DrawWeapReticle( void ) {
 		CG_FillRect( 319, 60, 1, 360, color );   // vert
 
 		CG_FillRect( 240, 220, 1, 40, color );   // r
-		hudflags &= ~HUD_ZOOMED_CROSSHAIR;
 	} else if ( weap == WP_FG42SCOPE ) {
 
 		// center
@@ -2142,7 +2157,6 @@ static void CG_DrawWeapReticle( void ) {
 		}
 
 		// hairs
-		hudflags |= HUD_ZOOMED_CROSSHAIR;
 		CG_FillRect( 84, 239, 150, 3, color );   // left
 		CG_FillRect( 234, 240, 173, 1, color );  // horiz center
 		CG_FillRect( 407, 239, 150, 3, color );  // right
@@ -2153,8 +2167,8 @@ static void CG_DrawWeapReticle( void ) {
 
 		CG_FillRect( 320, 241, 1, 87, color );   // bot center top
 		CG_FillRect( 319, 327, 3, 151, color );  // bot center bot
-		hudflags &= ~HUD_ZOOMED_CROSSHAIR;
 	}
+	hudflags &= ~HUD_FLAGS_OPTICAL_CENTER;
 }
 
 
@@ -2174,15 +2188,9 @@ static void CG_DrawBinocReticle( void ) {
 
     float x = (X_WIDTH * indent), y = (Y_HEIGHT * indent), w = (X_WIDTH * (1-(2*indent))) / 2.0f, h = (Y_HEIGHT * (1-(2*indent))) / 2;
 
-    // sides
-    CG_FillRect( 0, 0, (X_WIDTH * indent), Y_HEIGHT, color );
-    CG_FillRect( X_WIDTH * (1 - indent), 0, (X_WIDTH * indent), Y_HEIGHT, color );
-// top/bottom
-    CG_FillRect( X_WIDTH * indent, 0, X_WIDTH * (1-indent), Y_HEIGHT * indent, color );
-    CG_FillRect( X_WIDTH * indent, Y_HEIGHT * (1-indent), X_WIDTH * (1-indent), Y_HEIGHT * indent, color );
-
-
+	hudflags |= HUD_FLAGS_OPTICAL_CENTER;
     CG_AdjustFrom640( &x, &y, &w, &h );
+	CG_DrawOpticalReticleMask( x, y, w * 2.0f, h * 2.0f, color );
 
 	if ( cgs.media.binocShaderSimpleQ ) {
         trap_R_DrawStretchPic( x, y, w, h, 0, 0, 1, 1, cgs.media.binocShaderSimpleQ );    // tl
@@ -2191,7 +2199,6 @@ static void CG_DrawBinocReticle( void ) {
         trap_R_DrawStretchPic( x + w, y + h, w, h, 1, 1, 0, 0, cgs.media.binocShaderSimpleQ );  // br
 	}
 
-	hudflags |= (HUD_FLAGS_STEREO|HUD_ZOOMED_CROSSHAIR);
 	CG_FillRect( 146, 239, 348, 1, color );
 
 	CG_FillRect( 188, 234, 1, 13, color );   // ll
@@ -2201,7 +2208,7 @@ static void CG_DrawBinocReticle( void ) {
 	CG_FillRect( 360, 234, 1, 13, color );   // rl
 	CG_FillRect( 406, 226, 1, 29, color );   // r
 	CG_FillRect( 452, 234, 1, 13, color );   // rr
-	hudflags &= ~(HUD_FLAGS_STEREO|HUD_ZOOMED_CROSSHAIR);
+	hudflags &= ~HUD_FLAGS_OPTICAL_CENTER;
 }
 
 void CG_FinishWeaponChange( int lastweap, int newweap ); // JPW NERVE

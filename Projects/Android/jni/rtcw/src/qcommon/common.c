@@ -1959,13 +1959,28 @@ static void Com_AndroidSanitizeArchivedCvars( void ) {
 	const char *menuFiles = Cvar_VariableString( "ui_menuFiles" );
 
 	if ( !menuFiles[0] || !strstr( menuFiles, ".txt" ) ) {
-		Com_Printf( "Android: forcing ui_menuFiles to ui/menus.txt\n" );
 		Cvar_Set( "ui_menuFiles", "ui/menus.txt" );
 	}
 
 	if ( Cvar_VariableIntegerValue( "com_soundMegs" ) < 16 ) {
-		Com_Printf( "Android: forcing com_soundMegs to 64\n" );
 		Cvar_Set( "com_soundMegs", "64" );
+	}
+
+	if ( Cvar_VariableIntegerValue( "r_lowMemTextureSize" ) != 0 ) {
+		Cvar_Set( "r_lowMemTextureSize", "0" );
+		Cvar_Set( "r_lowMemTextureThreshold", "0" );
+	}
+	if ( Cvar_VariableIntegerValue( "r_picmip" ) != 0 ) {
+		Cvar_Set( "r_picmip", "0" );
+	}
+	if ( Cvar_VariableIntegerValue( "r_picmip2" ) != 0 ) {
+		Cvar_Set( "r_picmip2", "0" );
+	}
+	if ( Cvar_VariableValue( "r_rmse" ) != 0.0f ) {
+		Cvar_Set( "r_rmse", "0" );
+	}
+	if ( Cvar_VariableIntegerValue( "r_texturebits" ) == 16 ) {
+		Cvar_Set( "r_texturebits", "32" );
 	}
 }
 #endif

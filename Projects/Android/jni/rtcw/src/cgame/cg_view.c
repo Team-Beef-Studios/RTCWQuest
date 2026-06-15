@@ -240,7 +240,7 @@ static void CG_CalcVrect( void ) {
 	lbheight = ysize * 0.85;
 	lbdiff = ysize - lbheight;
 
-	if ( cg_letterbox.integer ) {
+	if ( cg_letterbox.integer && !( cgVR && !cgVR->screen ) ) {
 		ysize = lbheight;
 //		if(letterbox_frac != 0) {
 //			letterbox_frac -= 0.01f;	// (SA) TODO: make non fps dependant
@@ -809,13 +809,41 @@ Fixed fov at intermissions, otherwise account for fov variable and zooms.
 #define WAVE_AMPLITUDE  1
 #define WAVE_FREQUENCY  0.4
 
-static int CG_CalcFov( void ) {
-	static float lastfov = 104;      // for transitions back from zoomed in modes
+static int CG_CalcFOVFromX( float fov_x ) {
 	float x;
 	float phase;
 	float v;
 	int contents;
-	float fov_x, fov_y;
+	float fov_y;
+	int inwater;
+
+	x = cg.refdef.width / tan( fov_x / 360 * M_PI );
+	fov_y = atan2( cg.refdef.height, x );
+	fov_y = fov_y * 360 / M_PI;
+
+	contents = CG_PointContents( cg.refdef.vieworg, -1 );
+	if ( contents & ( CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_LAVA ) ) {
+		phase = cg.time / 1000.0 * WAVE_FREQUENCY * M_PI * 2;
+		v = WAVE_AMPLITUDE * sin( phase );
+		fov_x += v;
+		fov_y -= v;
+		inwater = qtrue;
+		cg.refdef.rdflags |= RDF_UNDERWATER;
+		cg.refdef.override_fov = qtrue;
+	} else {
+		cg.refdef.rdflags &= ~RDF_UNDERWATER;
+		inwater = qfalse;
+	}
+
+	cg.refdef.fov_x = fov_x;
+	cg.refdef.fov_y = fov_y;
+
+	return inwater;
+}
+
+static int CG_CalcFov( void ) {
+	static float lastfov = 104;      // for transitions back from zoomed in modes
+	float fov_x;
 	float zoomFov;
 	float f;
 	int inwater;
@@ -841,7 +869,7 @@ static int CG_CalcFov( void ) {
 			// dmflag to prevent wide fov for all clientscg_
 			fov_x = 90;
 		} else {
-			fov_x = cgVR ? cgVR->fov : 90.0f;
+			fov_x = cgVR ? cgVR->fov_x : 90.0f;
 			if ( fov_x < 1 ) {
 				fov_x = 1;
 			} else if ( fov_x > 160 ) {
@@ -903,34 +931,18 @@ static int CG_CalcFov( void ) {
 //		fov_x = 55;
 //	}
 
-	x = cg.refdef.width / tan( fov_x / 360 * M_PI );
-	fov_y = atan2( cg.refdef.height, x );
-	fov_y = fov_y * 360 / M_PI;
-
-	// warp if underwater
-	contents = CG_PointContents( cg.refdef.vieworg, -1 );
-	if ( contents & ( CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_LAVA ) ) {
-		phase = cg.time / 1000.0 * WAVE_FREQUENCY * M_PI * 2;
-		v = WAVE_AMPLITUDE * sin( phase );
-		fov_x += v;
-		fov_y -= v;
-		inwater = qtrue;
-		cg.refdef.rdflags |= RDF_UNDERWATER;
-	} else {
-		cg.refdef.rdflags &= ~RDF_UNDERWATER;
-		inwater = qfalse;
+	inwater = CG_CalcFOVFromX( fov_x );
+	if ( cgVR ) {
+		if ( dead ) {
+			cgVR->cgzoommode = 0;
+		} else if ( cg.zoomedBinoc ) {
+			cgVR->cgzoommode = 1;
+		} else if ( cg.zoomedScope || cg.zoomval > 0.0f ) {
+			cgVR->cgzoommode = 2;
+		} else {
+			cgVR->cgzoommode = 0;
+		}
 	}
-
-	contents = CG_PointContents( cg.refdef.vieworg, -1 );
-	if ( contents & ( CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_LAVA ) ) {
-		cg.refdef.rdflags |= RDF_UNDERWATER;
-	} else {
-		cg.refdef.rdflags &= ~RDF_UNDERWATER;
-	}
-
-	// set it
-	cg.refdef.fov_x = fov_x;
-	cg.refdef.fov_y = fov_y;
 
 	if ( !cg.zoomedBinoc ) {
 		// NERVE - SMF - fix for zoomed in/out movement bug
@@ -1080,7 +1092,6 @@ static int CG_CalcViewValues( void ) {
 	if ( cg.cameraMode ) {
 		vec3_t origin, angles;
 		float fov = 104;
-		float x;
 
 		if ( trap_getCameraInfo( CAM_PRIMARY, cg.time, &origin, &angles, &fov ) ) {
 			if ( cgVR ) {
@@ -1105,10 +1116,16 @@ static int CG_CalcViewValues( void ) {
 
 			AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
 
-			x = cg.refdef.width / tan( fov / 360 * M_PI );
-			cg.refdef.fov_y = atan2( cg.refdef.height, x );
-			cg.refdef.fov_y = cg.refdef.fov_y * 360 / M_PI;
-			cg.refdef.fov_x = fov;
+			if ( cgVR && !cgVR->screen ) {
+				fov = cgVR->fov_x;
+			} else {
+				cg.refdef.override_fov = qtrue;
+			}
+
+			CG_CalcFOVFromX( fov );
+			if ( cgVR ) {
+				cgVR->cgzoommode = 0;
+			}
 
 			// RF, had to disable, sometimes a loadgame to a camera in the same position
 			// can cause the game to not know where the camera is, therefore snapshots
@@ -1274,15 +1291,10 @@ CG_DrawSkyBoxPortal
 ==============
 */
 void CG_DrawSkyBoxPortal( void ) {
-	static float lastfov = 90;      // for transitions back from zoomed in modes
 	refdef_t backuprefdef;
 	float fov_x;
-	float fov_y;
-	float x;
 	char *cstr;
 	char *token;
-	float zoomFov;
-	float f;
 	static qboolean foginited = qfalse; // only set the portal fog values once
 
 	if ( !( cstr = (char *)CG_ConfigString( CS_SKYBOXORG ) ) || !strlen( cstr ) ) {
@@ -1386,58 +1398,6 @@ void CG_DrawSkyBoxPortal( void ) {
 		//----(SA)	end
 
 
-		if ( cg.predictedPlayerState.pm_type == PM_INTERMISSION ) {
-			// if in intermission, use a fixed value
-			fov_x = 90;
-		} else {
-			// user selectable
-			if ( cgs.dmflags & DF_FIXED_FOV ) {
-				// dmflag to prevent wide fov for all clients
-				fov_x = 90;
-			} else {
-				fov_x = cgVR ? cgVR->fov : 90.0f;
-				if ( fov_x < 1 ) {
-					fov_x = 1;
-				} else if ( fov_x > 160 ) {
-					fov_x = 160;
-				}
-			}
-
-			// account for zooms
-			if ( cg.zoomval ) {
-				zoomFov = cg.zoomval;   // (SA) use user scrolled amount
-
-				if ( zoomFov < 1 ) {
-					zoomFov = 1;
-				} else if ( zoomFov > 160 ) {
-					zoomFov = 160;
-				}
-			} else {
-				zoomFov = lastfov;
-			}
-
-			// do smooth transitions for the binocs
-			if ( cg.zoomedBinoc ) {        // binoc zooming in
-				f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME;
-				if ( f > 1.0 ) {
-					fov_x = zoomFov;
-				} else {
-					fov_x = fov_x + f * ( zoomFov - fov_x );
-				}
-				lastfov = fov_x;
-			} else if ( cg.zoomval ) {    // zoomed by sniper/snooper
-				fov_x = cg.zoomval;
-				lastfov = fov_x;
-			} else {                    // binoc zooming out
-				f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME;
-				if ( f > 1.0 ) {
-					fov_x = fov_x;
-				} else {
-					fov_x = zoomFov + f * ( fov_x - zoomFov );
-				}
-			}
-		}
-
 		if ( cg.weaponSelect == WP_SNOOPERSCOPE ) {
 			cg.refdef.rdflags |= RDF_SNOOPERVIEW;
 		} else {
@@ -1449,12 +1409,13 @@ void CG_DrawSkyBoxPortal( void ) {
 		//	fov_x = 55;
 		//}
 
-		x = cg.refdef.width / tan( fov_x / 360 * M_PI );
-		fov_y = atan2( cg.refdef.height, x );
-		fov_y = fov_y * 360 / M_PI;
-
-		cg.refdef.fov_x = fov_x;
-		cg.refdef.fov_y = fov_y;
+		cg.refdef.override_fov = backuprefdef.override_fov;
+		if ( backuprefdef.fov_x > 1.0f && backuprefdef.fov_y > 1.0f ) {
+			cg.refdef.fov_x = backuprefdef.fov_x;
+			cg.refdef.fov_y = backuprefdef.fov_y;
+		} else {
+			CG_CalcFOVFromX( fov_x );
+		}
 
 		cg.refdef.rdflags |= RDF_SKYBOXPORTAL;
 		cg.refdef.rdflags |= RDF_DRAWSKYBOX;
@@ -1606,6 +1567,7 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 
 	// build cg.refdef
 	inwater = CG_CalcViewValues();
+	cg.refdef.stereoView = stereoView;
 
 	CG_CalcShakeCamera();
 	CG_ApplyShakeCamera();

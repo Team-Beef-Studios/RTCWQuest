@@ -78,6 +78,7 @@ static jmethodID android_haptic_disable;
 static char **argv;
 static int argc;
 static long long frameIndex;
+
 static qboolean vrInitialised;
 static qboolean vrPreInitialised;
 static qboolean vrCvarsInitialised;
@@ -190,11 +191,6 @@ static JNIEnv *GetJniEnv(void)
 static qboolean RTCWVR_WaitForAndroidSurface(void)
 {
 	for (int i = 0; i < 200 && (gAppThread.NativeWindow == NULL || !gAppThread.Resumed); ++i) {
-		if ((i % 50) == 0) {
-			Com_Printf("Android VR: waiting for activity surface/resume window=%p resumed=%d\n",
-					   (void *)gAppThread.NativeWindow,
-					   gAppThread.Resumed);
-		}
 		usleep(10000);
 	}
 	return (gAppThread.NativeWindow != NULL && gAppThread.Resumed);
@@ -211,12 +207,6 @@ static void RTCWVR_InitSharedState(void)
 
 qboolean RTCWVR_PreRendererInit(void)
 {
-	Com_Printf("Android VR: RTCWVR_PreRendererInit enter pre=%d initialised=%d instance=%p window=%p resumed=%d\n",
-			   vrPreInitialised,
-			   vrInitialised,
-			   (void *)gAppState.Instance,
-			   (void *)gAppThread.NativeWindow,
-			   gAppThread.Resumed);
 	if (vrPreInitialised) {
 		if (gAppState.Instance != XR_NULL_HANDLE) {
 			Cvar_Set("r_customwidth", va("%d", (int)gAppState.Width));
@@ -230,13 +220,10 @@ qboolean RTCWVR_PreRendererInit(void)
 	RTCWVR_InitSharedState();
 	vrPreInitialised = qtrue;
 
-	if (!RTCWVR_WaitForAndroidSurface()) {
-		Com_Printf("Android VR: no activity surface/resume before renderer init\n");
-	}
+	RTCWVR_WaitForAndroidSurface();
 
 	TBXR_InitialiseOpenXR();
 	if (gAppState.Instance == XR_NULL_HANDLE) {
-		Com_Printf("Android VR: OpenXR unavailable\n");
 		return qfalse;
 	}
 
@@ -245,8 +232,6 @@ qboolean RTCWVR_PreRendererInit(void)
 	Cvar_Set("r_mode", "-1");
 	Cvar_Set("com_maxfps", "0");
 
-	Com_Printf("Android VR: pre-renderer OpenXR resolution %dx%d\n",
-			   (int)gAppState.Width, (int)gAppState.Height);
 	return qtrue;
 }
 
@@ -255,9 +240,6 @@ void RTCWVR_InitOnce(void)
 	void *ctx;
 
 	if (!vrPreInitialised || gAppState.Instance == XR_NULL_HANDLE) {
-		Com_Printf("Android VR: RTCWVR_InitOnce skipped pre=%d instance=%p\n",
-				   vrPreInitialised,
-				   (void *)gAppState.Instance);
 		return;
 	}
 
@@ -266,7 +248,6 @@ void RTCWVR_InitOnce(void)
 		if (ctx == vrGlContext) {
 			return;
 		}
-		Com_Printf("Android VR: GL context changed, rebuilding OpenXR session\n");
 		TBXR_DestroySessionForReinit();
 		vrInitialised = qfalse;
 	}
@@ -279,10 +260,6 @@ void RTCWVR_InitOnce(void)
 
 	vrInitialised = qtrue;
 	vrGlContext = ctx;
-	Com_Printf("Android VR: OpenXR session active session=%p active=%d focused=%d\n",
-			   (void *)gAppState.Session,
-			   gAppState.SessionActive,
-			   gAppState.Focused);
 }
 
 void RTCWVR_Init(void)
@@ -328,23 +305,11 @@ void RTCWVR_setUseScreenLayer(qboolean use)
 static void RTCWVR_UpdateScreenLayer(void)
 {
 	static qboolean lastUse = qfalse;
-	static int screenLogs = 0;
 	qboolean use = VR_CalculateScreenLayer();
 
 	RTCWVR_setUseScreenLayer(use);
 	if (use != lastUse) {
-		Com_Printf("Android VR: screen layer changed use=%d state=%d keyCatchers=%d\n",
-				   use, cls.state, cls.keyCatchers);
 		lastUse = use;
-	}
-	if (screenLogs++ < 20 || (screenLogs % 300) == 0) {
-		Com_Printf("Android VR: screen layer state use=%d cls=%d keyCatchers=%d demo=%d cgame=%d frame=%d\n",
-				   use,
-				   cls.state,
-				   cls.keyCatchers,
-				   clc.demoplaying,
-				   cls.cgameStarted,
-				   screenLogs);
 	}
 }
 
@@ -418,6 +383,26 @@ qboolean VR_GetFovTangentsForEye(int eye, float *tanLeft, float *tanRight, float
 	return qtrue;
 }
 
+qboolean VR_GetProjectionZoomFactors(float refFovX, float refFovY, qboolean overrideFov, float *zoomX, float *zoomY)
+{
+	*zoomX = 1.0f;
+	*zoomY = 1.0f;
+
+	if (!overrideFov && !vr.cgzoommode) {
+		return qfalse;
+	}
+	if (refFovX <= 1.0f || refFovY <= 1.0f) {
+		return qfalse;
+	}
+	if (vr.fov_x > 1.0f) {
+		*zoomX = vr.fov_x / refFovX;
+	}
+	if (vr.fov_y > 1.0f) {
+		*zoomY = vr.fov_y / refFovY;
+	}
+	return qtrue;
+}
+
 float VR_GetEyeStereoSeparation(int eye)
 {
 	XrVector3f *l;
@@ -441,7 +426,15 @@ float VR_GetEyeStereoSeparation(int eye)
 
 void VR_FrameSetup(void)
 {
-	vr.fov = gAppState.Views ? (fabsf(gAppState.Views[0].fov.angleUp) + fabsf(gAppState.Views[0].fov.angleDown)) * 180.0f / (float)M_PI : 90.0f;
+	if (gAppState.Views) {
+		vr.fov = (fabsf(gAppState.Views[0].fov.angleUp) + fabsf(gAppState.Views[0].fov.angleDown)) * 180.0f / (float)M_PI;
+		vr.fov_x = (fabsf(gAppState.Views[0].fov.angleLeft) + fabsf(gAppState.Views[1].fov.angleRight)) * 180.0f / (float)M_PI;
+		vr.fov_y = (fabsf(gAppState.Views[0].fov.angleUp) + fabsf(gAppState.Views[0].fov.angleDown)) * 180.0f / (float)M_PI;
+	} else {
+		vr.fov = 90.0f;
+		vr.fov_x = 90.0f;
+		vr.fov_y = 90.0f;
+	}
 }
 
 void VR_HandleControllerInput(void)
@@ -738,7 +731,6 @@ JNIEXPORT void JNICALL Java_com_drbeef_rtcwquest_GLES3JNILib_onSurfaceCreated(JN
 	gAppThread.NativeWindow = ANativeWindow_fromSurface(env, surface);
 	gAppState.NativeWindow = gAppThread.NativeWindow;
 	gAppState.NativeWindowChanged = true;
-	__android_log_print(ANDROID_LOG_INFO, "RTCW", "Android VR: surface available %p", (void *)gAppThread.NativeWindow);
 }
 
 JNIEXPORT void JNICALL Java_com_drbeef_rtcwquest_GLES3JNILib_onSurfaceChanged(JNIEnv *env, jobject obj, jlong handle, jobject surface)

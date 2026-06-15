@@ -29,7 +29,7 @@ EFXR_SurfaceView.c; the JNI VM/activity the loader needs come from gAppThread
 #include <sys/syscall.h>
 
 
-const float ZOOM_FOV_ADJUST = 1.1f;
+const float ZOOM_FOV_ADJUST = 1.05f;
 
 static qboolean TBXR_StringContainsNoCase(const char *haystack, const char *needle)
 {
@@ -778,16 +778,8 @@ void ovrApp_Clear(ovrApp* app) {
 
 
 static const char *TBXR_SessionStateName(XrSessionState state);
-static void TBXR_LogEglState(const char *where);
 
 void ovrApp_HandleSessionStateChanges(ovrApp* app, XrSessionState state) {
-	ALOGI("TBXR session state change handler: state=%s(%d) before active=%d focused=%d session=%p viewportType=%d",
-			TBXR_SessionStateName(state),
-			state,
-			app->SessionActive,
-			app->Focused,
-			(void *)app->Session,
-			app->ViewportConfig.viewConfigurationType);
 	if (state == XR_SESSION_STATE_READY) {
 		assert(app->SessionActive == false);
 		app->Focused = false;
@@ -799,20 +791,15 @@ void ovrApp_HandleSessionStateChanges(ovrApp* app, XrSessionState state) {
 		sessionBeginInfo.primaryViewConfigurationType = app->ViewportConfig.viewConfigurationType;
 
 		XrResult result;
-		TBXR_LogEglState("before xrBeginSession");
 		OXR(result = xrBeginSession(app->Session, &sessionBeginInfo));
-		ALOGI("TBXR xrBeginSession result=%d active-before-set=%d focused=%d", result, app->SessionActive, app->Focused);
 
 		app->SessionActive = (result == XR_SUCCESS);
-		ALOGI("TBXR READY handled: active=%d focused=%d", app->SessionActive, app->Focused);
 	} else if (state == XR_SESSION_STATE_STOPPING) {
 		assert(app->SessionActive);
 
-		ALOGI("TBXR calling xrEndSession session=%p", (void *)app->Session);
 		OXR(xrEndSession(app->Session));
 		app->SessionActive = false;
 		app->Focused = false;
-		ALOGI("TBXR STOPPING handled: active=%d focused=%d", app->SessionActive, app->Focused);
 	}
 }
 
@@ -828,11 +815,6 @@ GLboolean ovrApp_HandleXrEvents(ovrApp* app) {
 		XrResult r;
 		OXR(r = xrPollEvent(app->Instance, &eventDataBuffer));
 		if (r != XR_SUCCESS) {
-			static int noEventLogs = 0;
-			if (noEventLogs++ < 20 || (noEventLogs % 300) == 0) {
-				ALOGI("TBXR xrPollEvent no event/result=%d active=%d focused=%d session=%p frameSetup=%d",
-						r, app->SessionActive, app->Focused, (void *)app->Session, app->FrameSetup);
-			}
 			break;
 		}
 
@@ -886,28 +868,13 @@ GLboolean ovrApp_HandleXrEvents(ovrApp* app) {
 						session_state_changed_event->state,
 						(void*)session_state_changed_event->session,
 						FromXrTime(session_state_changed_event->time));
-				ALOGI("TBXR event SESSION_STATE_CHANGED %s(%d) eventSession=%p appSession=%p active=%d focused=%d",
-						TBXR_SessionStateName(session_state_changed_event->state),
-						session_state_changed_event->state,
-						(void *)session_state_changed_event->session,
-						(void *)app->Session,
-						app->SessionActive,
-						app->Focused);
-				__android_log_print(ANDROID_LOG_INFO, "RTCW",
-						"Android VR: OpenXR session state=%s(%d) sessionActive=%d focused=%d",
-						TBXR_SessionStateName(session_state_changed_event->state),
-						session_state_changed_event->state,
-						app->SessionActive,
-						app->Focused);
 
 				switch (session_state_changed_event->state) {
 					case XR_SESSION_STATE_FOCUSED:
 						app->Focused = true;
-						ALOGI("TBXR FOCUSED event applied: active=%d focused=%d", app->SessionActive, app->Focused);
 						break;
 					case XR_SESSION_STATE_VISIBLE:
 						app->Focused = false;
-						ALOGI("TBXR VISIBLE event applied: active=%d focused=%d", app->SessionActive, app->Focused);
 						break;
 					case XR_SESSION_STATE_READY:
 					case XR_SESSION_STATE_STOPPING:
@@ -943,28 +910,6 @@ static const char *TBXR_SessionStateName(XrSessionState state)
 		case XR_SESSION_STATE_EXITING: return "EXITING";
 		default: return "<invalid>";
 	}
-}
-
-static void TBXR_LogEglState(const char *where)
-{
-	ALOGI("TBXR[%s] tid=%ld egl display=%p currentDisplay=%p config=%p drawSurface=%p readSurface=%p context=%p app display=%p app config=%p app tiny=%p nativeWindow=%p resumed=%d session=%p active=%d focused=%d frameSetup=%d",
-			where,
-			(long)syscall(SYS_gettid),
-			(void *)gAppState.Egl.Display,
-			(void *)eglGetCurrentDisplay(),
-			(void *)gAppState.Egl.Config,
-			(void *)eglGetCurrentSurface(EGL_DRAW),
-			(void *)eglGetCurrentSurface(EGL_READ),
-			(void *)eglGetCurrentContext(),
-			(void *)gAppState.Egl.Display,
-			(void *)gAppState.Egl.Config,
-			(void *)gAppState.Egl.TinySurface,
-			(void *)gAppThread.NativeWindow,
-			gAppThread.Resumed,
-			(void *)gAppState.Session,
-			gAppState.SessionActive,
-			gAppState.Focused,
-			gAppState.FrameSetup);
 }
 
 void TBXR_GetScreenRes(int *width, int *height)
@@ -1074,25 +1019,16 @@ void TBXR_EnterVR( ) {
 
 	if (gAppState.Session) {
 		Com_Printf("TBXR_EnterVR called with existing session");
-		TBXR_LogEglState("TBXR_EnterVR existing-session");
 		return;
 	}
 
 	// Create the OpenXR Session bound to the current EGL/GLES context.
-	TBXR_LogEglState("TBXR_EnterVR before binding");
 	XrGraphicsBindingOpenGLESAndroidKHR graphicsBindingAndroidGLES = {0};
 	graphicsBindingAndroidGLES.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR;
 	graphicsBindingAndroidGLES.next = NULL;
 	graphicsBindingAndroidGLES.display = eglGetCurrentDisplay();
 	graphicsBindingAndroidGLES.config = eglGetCurrentSurface(EGL_DRAW);
 	graphicsBindingAndroidGLES.context = eglGetCurrentContext();
-	ALOGI("TBXR create session binding display=%p config(surface)=%p context=%p appConfig=%p appTiny=%p systemId=%llu",
-			(void *)graphicsBindingAndroidGLES.display,
-			(void *)graphicsBindingAndroidGLES.config,
-			(void *)graphicsBindingAndroidGLES.context,
-			(void *)gAppState.Egl.Config,
-			(void *)gAppState.Egl.TinySurface,
-			(unsigned long long)gAppState.SystemId);
 
 	XrSessionCreateInfo sessionCreateInfo = {0};
 	memset(&sessionCreateInfo, 0, sizeof(sessionCreateInfo));
@@ -1103,7 +1039,6 @@ void TBXR_EnterVR( ) {
 
 	XrResult initResult;
 	OXR(initResult = xrCreateSession(gAppState.Instance, &sessionCreateInfo, &gAppState.Session));
-	ALOGI("TBXR xrCreateSession result=%d session=%p", initResult, (void *)gAppState.Session);
 	if (initResult != XR_SUCCESS) {
 		ALOGE("Failed to create XR session: %d.", initResult);
 		exit(1);
@@ -1115,7 +1050,6 @@ void TBXR_EnterVR( ) {
 	spaceCreateInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
 	spaceCreateInfo.poseInReferenceSpace.orientation.w = 1.0f;
 	OXR(xrCreateReferenceSpace(gAppState.Session, &spaceCreateInfo, &gAppState.ViewSpace));
-	ALOGI("TBXR view space created: viewSpace=%p", (void *)gAppState.ViewSpace);
 }
 
 void TBXR_LeaveVR( ) {
@@ -1214,12 +1148,6 @@ void VR_DestroyRenderer(  )
 
 void TBXR_InitialiseOpenXR()
 {
-	ALOGI("TBXR_InitialiseOpenXR begin tid=%ld javaVm=%p activity=%p nativeWindow=%p resumed=%d",
-			(long)syscall(SYS_gettid),
-			(void *)gAppThread.JavaVm,
-			(void *)gAppThread.ActivityObject,
-			(void *)gAppThread.NativeWindow,
-			gAppThread.Resumed);
 	ovrApp_Clear(&gAppState);
 
 	// Create the EGL/GLES3 context the session will be bound to, and make it
@@ -1227,7 +1155,6 @@ void TBXR_InitialiseOpenXR()
 	ovrEgl_CreateContext(&gAppState.Egl, NULL);
 	gAppState.MainThreadTid = (int)syscall(SYS_gettid);
 	gAppState.RenderThreadTid = 0;
-	TBXR_LogEglState("after ovrEgl_CreateContext");
 
 	// Optional HMD hint (used only to pick controller interaction profiles).
 	{
@@ -1248,13 +1175,7 @@ void TBXR_InitialiseOpenXR()
 			loaderInitInfoAndroid.next = NULL;
 			loaderInitInfoAndroid.applicationVM = gAppThread.JavaVm;
 			loaderInitInfoAndroid.applicationContext = gAppThread.ActivityObject;
-			XrResult loaderResult = xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
-			ALOGI("TBXR xrInitializeLoaderKHR result=%d vm=%p activity=%p",
-					loaderResult,
-					(void *)loaderInitInfoAndroid.applicationVM,
-					(void *)loaderInitInfoAndroid.applicationContext);
-		} else {
-			ALOGI("TBXR xrInitializeLoaderKHR unavailable");
+			xrInitializeLoaderKHR((XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
 		}
 	}
 
@@ -1287,12 +1208,7 @@ void TBXR_InitialiseOpenXR()
 
 	XrResult initResult;
 	gAppState.Instance = XR_NULL_HANDLE;
-	ALOGI("TBXR xrCreateInstance begin requiredExtensions=%u appActivity=%p appVM=%p",
-			numRequiredExtensions,
-			(void *)instanceCreateInfoAndroid.applicationActivity,
-			(void *)instanceCreateInfoAndroid.applicationVM);
 	OXR(initResult = xrCreateInstance(&instanceCreateInfo, &gAppState.Instance));
-	ALOGI("TBXR xrCreateInstance result=%d instance=%p", initResult, (void *)gAppState.Instance);
 	if (initResult != XR_SUCCESS) {
 		// Non-fatal: leave the instance null so VR_Init() can fall back to a
 		// flat-screen session instead of taking the whole game down.
@@ -1319,13 +1235,6 @@ void TBXR_InitialiseOpenXR()
 			XR_VERSION_MAJOR(instanceInfo.runtimeVersion),
 			XR_VERSION_MINOR(instanceInfo.runtimeVersion),
 			XR_VERSION_PATCH(instanceInfo.runtimeVersion));
-	ALOGI("TBXR runtime='%s' version=%u.%u.%u inferredHmd='%s'",
-			instanceInfo.runtimeName,
-			XR_VERSION_MAJOR(instanceInfo.runtimeVersion),
-			XR_VERSION_MINOR(instanceInfo.runtimeVersion),
-			XR_VERSION_PATCH(instanceInfo.runtimeVersion),
-			gAppState.OpenXRHMD);
-
 	XrSystemGetInfo systemGetInfo;
 	memset(&systemGetInfo, 0, sizeof(systemGetInfo));
 	systemGetInfo.type = XR_TYPE_SYSTEM_GET_INFO;
@@ -1333,7 +1242,6 @@ void TBXR_InitialiseOpenXR()
 	systemGetInfo.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 
 	OXR(initResult = xrGetSystem(gAppState.Instance, &systemGetInfo, &gAppState.SystemId));
-	ALOGI("TBXR xrGetSystem result=%d systemId=%llu", initResult, (unsigned long long)gAppState.SystemId);
 	if (initResult != XR_SUCCESS) {
 		// No HMD available (runtime up but no headset, etc).  Non-fatal: tear
 		// down the instance and null it so VR_Init() falls back to flat-screen.
@@ -1354,15 +1262,10 @@ void TBXR_InitialiseOpenXR()
 	graphicsRequirements.type = XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR;
 	OXR(pfnGetOpenGLESGraphicsRequirementsKHR(gAppState.Instance, gAppState.SystemId,
 											  &graphicsRequirements));
-	ALOGI("TBXR GLES requirements min=%llu max=%llu",
-			(unsigned long long)graphicsRequirements.minApiVersionSupported,
-			(unsigned long long)graphicsRequirements.maxApiVersionSupported);
 
 	TBXR_InitialiseResolution();
-	ALOGI("TBXR resolution width=%0.0f height=%0.0f", gAppState.Width, gAppState.Height);
 
 	gAppState.Initialised = true;
-	ALOGI("TBXR_InitialiseOpenXR complete initialised=%d", gAppState.Initialised);
 }
 
 void TBXR_Recenter() {
@@ -1394,27 +1297,18 @@ void TBXR_Recenter() {
 
 void TBXR_WaitForSessionActive()
 {//Now wait for the session to be ready
-	int waitLoops = 0;
-	ALOGI("TBXR_WaitForSessionActive begin active=%d focused=%d session=%p",
-			gAppState.SessionActive, gAppState.Focused, (void *)gAppState.Session);
 	while (!gAppState.SessionActive) {
 		TBXR_ProcessMessageQueue();
 		if (ovrApp_HandleXrEvents(&gAppState)) {
 			TBXR_Recenter();
 		}
-		if (waitLoops++ < 20 || (waitLoops % 300) == 0) {
-			ALOGI("TBXR_WaitForSessionActive loop=%d active=%d focused=%d session=%p destroyed=%d",
-					waitLoops, gAppState.SessionActive, gAppState.Focused, (void *)gAppState.Session, destroyed);
-		}
 	}
-	ALOGI("TBXR_WaitForSessionActive end loops=%d active=%d focused=%d", waitLoops, gAppState.SessionActive, gAppState.Focused);
 }
 
 static void TBXR_GetHMDOrientation() {
 
 	if (gAppState.FrameState.predictedDisplayTime == 0)
 	{
-		ALOGI("TBXR_GetHMDOrientation skipped: predictedDisplayTime=0");
 		return;
 	}
 
@@ -1440,28 +1334,13 @@ static void TBXR_GetHMDOrientation() {
 //All the stuff we want to do each frame
 void TBXR_FrameSetup()
 {
-	static int notReadyLogs = 0;
-	static int inactiveLogs = 0;
-	static int frameSetupLogs = 0;
-	static int frameAttemptLogs = 0;
-
 	if (!gAppState.Initialised)
 	{
-		if (notReadyLogs++ < 5) {
-			ALOGI("TBXR_FrameSetup skipped: OpenXR not initialised");
-		}
 		return;
 	}
 
 	if (gAppState.FrameSetup)
 	{
-		if (frameAttemptLogs++ < 20 || (frameAttemptLogs % 300) == 0) {
-			ALOGI("TBXR_FrameSetup early-out: frame already setup active=%d focused=%d session=%p predicted=%lld",
-					gAppState.SessionActive,
-					gAppState.Focused,
-					(void *)gAppState.Session,
-					(long long)gAppState.FrameState.predictedDisplayTime);
-		}
 		return;
 	}
 
@@ -1476,9 +1355,6 @@ void TBXR_FrameSetup()
 
 		if (gAppState.SessionActive == GL_FALSE)
 		{
-			if (inactiveLogs++ < 20) {
-				ALOGI("TBXR_FrameSetup waiting: SessionActive=%d Focused=%d", gAppState.SessionActive, gAppState.Focused);
-			}
 			continue;
 		}
 
@@ -1495,7 +1371,6 @@ void TBXR_FrameSetup()
 
 		if (gAppState.Focused)
 		{
-			ALOGI("TBXR_FrameSetup focused before xrWaitFrame");
 			break;
 		}
 
@@ -1530,9 +1405,6 @@ void TBXR_FrameSetup()
 
 	gAppState.FrameSetup = true;
 	gAppState.FinishedEyeMask = 0;
-	if (frameSetupLogs++ < 20 || (frameSetupLogs % 300) == 0) {
-		ALOGI("TBXR_FrameSetup ok: predictedDisplayTime=%lld", (long long)gAppState.FrameState.predictedDisplayTime);
-	}
 }
 
 int TBXR_GetRefresh()
@@ -1563,7 +1435,6 @@ void TBXR_ClearFrameBuffer(int width, int height)
 
 void TBXR_prepareEyeBuffer(int eye)
 {
-	static int prepareLogs = 0;
 	if (!gAppState.FrameSetup) {
 		return;
 	}
@@ -1578,21 +1449,6 @@ void TBXR_prepareEyeBuffer(int eye)
 	ovrFramebuffer_Acquire(frameBuffer);
 	ovrFramebuffer_SetCurrent(frameBuffer);
 	TBXR_ClearFrameBuffer(frameBuffer->ColorSwapChain.Width, frameBuffer->ColorSwapChain.Height);
-	if (prepareLogs++ < 20 || (prepareLogs % 300) == 0) {
-		GLint fb = 0;
-		GLint vp[4] = {0, 0, 0, 0};
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fb);
-		glGetIntegerv(GL_VIEWPORT, vp);
-		ALOGI("TBXR_prepareEyeBuffer eye=%d screen=%d fbo=%d swapchain=%p image=%u size=%ux%u viewport=%d,%d %dx%d",
-			  eye,
-			  VR_UseScreenLayer(),
-			  fb,
-			  (void *)frameBuffer->ColorSwapChain.Handle,
-			  frameBuffer->TextureSwapChainIndex,
-			  frameBuffer->ColorSwapChain.Width,
-			  frameBuffer->ColorSwapChain.Height,
-			  vp[0], vp[1], vp[2], vp[3]);
-	}
 
 	ovrFramebuffer_Acquire(&gAppState.Renderer.NullFrameBuffer);
 
@@ -1606,28 +1462,12 @@ void TBXR_prepareEyeBuffer(int eye)
 
 void TBXR_finishEyeBuffer(int eye)
 {
-	static int finishLogs = 0;
 	if (!gAppState.FrameSetup) {
 		return;
 	}
 
 	ovrRenderer *renderer = &gAppState.Renderer;
 	ovrFramebuffer *frameBuffer = &(renderer->FrameBuffer[eye]);
-	if (finishLogs++ < 20 || (finishLogs % 300) == 0) {
-		GLint fb = 0;
-		GLubyte pixel[4] = {0, 0, 0, 0};
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fb);
-		glReadPixels(frameBuffer->ColorSwapChain.Width / 2,
-					 frameBuffer->ColorSwapChain.Height / 2,
-					 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
-		ALOGI("TBXR_finishEyeBuffer eye=%d screen=%d fbo=%d centerRGBA=%u,%u,%u,%u swapchain=%p image=%u",
-			  eye,
-			  VR_UseScreenLayer(),
-			  fb,
-			  pixel[0], pixel[1], pixel[2], pixel[3],
-			  (void *)frameBuffer->ColorSwapChain.Handle,
-			  frameBuffer->TextureSwapChainIndex);
-	}
 
 	// Clear the alpha channel, other way OpenXR would not transfer the framebuffer fully
 	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
@@ -1648,10 +1488,6 @@ void TBXR_finishEyeBuffer(int eye)
 
 	ovrFramebuffer_Release(frameBuffer);
 	gAppState.FinishedEyeMask |= (1u << eye);
-	if (finishLogs < 100 || (finishLogs % 300) == 0) {
-		ALOGI("TBXR_finishEyeBuffer complete eye=%d finishedMask=0x%x frameSetup=%d",
-			  eye, gAppState.FinishedEyeMask, gAppState.FrameSetup);
-	}
 }
 
 void TBXR_updateProjections()
@@ -1679,21 +1515,12 @@ void TBXR_updateProjections()
 
 void TBXR_submitFrame()
 {
-	static int submitSkipLogs = 0;
-	static int incompleteSubmitLogs = 0;
 	if (gAppState.SessionActive == GL_FALSE || !gAppState.FrameSetup) {
-		if (submitSkipLogs++ < 20) {
-			ALOGI("TBXR_submitFrame skipped: SessionActive=%d FrameSetup=%d", gAppState.SessionActive, gAppState.FrameSetup);
-		}
 		return;
 	}
 
 	const uint32_t requiredMask = VR_UseScreenLayer() ? 0x1u : 0x3u;
 	if ((gAppState.FinishedEyeMask & requiredMask) != requiredMask) {
-		if (incompleteSubmitLogs++ < 40 || (incompleteSubmitLogs % 300) == 0) {
-			ALOGI("TBXR_submitFrame deferred: screen=%d finishedMask=0x%x required=0x%x",
-				  VR_UseScreenLayer(), gAppState.FinishedEyeMask, requiredMask);
-		}
 		return;
 	}
 
@@ -1727,6 +1554,13 @@ void TBXR_submitFrame()
 		for (int eye = 0; eye < ovrMaxNumEyes; eye++)
 		{
 			XrFovf fov = gAppState.Views[eye].fov;
+			if (vr.cgzoommode)
+			{
+				fov.angleLeft /= ZOOM_FOV_ADJUST;
+				fov.angleRight /= ZOOM_FOV_ADJUST;
+				fov.angleUp /= ZOOM_FOV_ADJUST;
+				fov.angleDown /= ZOOM_FOV_ADJUST;
+			}
 
 			memset(&projection_layer_elements[eye], 0, sizeof(XrCompositionLayerProjectionView));
 			projection_layer_elements[eye].type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
@@ -1792,11 +1626,6 @@ void TBXR_submitFrame()
 
 	endFrameInfo.layerCount = layerCount;
 	OXR(xrEndFrame(gAppState.Session, &endFrameInfo));
-	ALOGI("TBXR_submitFrame ended: screen=%d layers=%d finishedMask=0x%x displayTime=%lld",
-		  VR_UseScreenLayer(),
-		  layerCount,
-		  gAppState.FinishedEyeMask,
-		  (long long)gAppState.FrameState.predictedDisplayTime);
 
 	gAppState.FrameSetup = false;
 	gAppState.FinishedEyeMask = 0;

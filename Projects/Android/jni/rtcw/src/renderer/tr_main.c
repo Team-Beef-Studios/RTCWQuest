@@ -50,6 +50,7 @@ static float s_flipMatrix[16] = {
 refimport_t ri;
 
 qboolean VR_GetFovTangentsForEye(int eye, float *tanLeft, float *tanRight, float *tanUp, float *tanDown);
+qboolean VR_GetProjectionZoomFactors(float refFovX, float refFovY, qboolean overrideFov, float *zoomX, float *zoomY);
 
 // entities that will have procedurally generated surfaces will just
 // point at this for their sorting surface
@@ -841,6 +842,14 @@ void R_SetupProjection( void ) {
 		int eye = (tr.viewParms.stereoFrame == STEREO_LEFT) ? 0 : 1;
 
 		if (VR_GetFovTangentsForEye(eye, &tanLeft, &tanRight, &tanUp, &tanDown)) {
+			float zoomX = 1.0f;
+			float zoomY = 1.0f;
+			if ( VR_GetProjectionZoomFactors( tr.refdef.fov_x, tr.refdef.fov_y, tr.refdef.override_fov, &zoomX, &zoomY ) ) {
+				tanLeft /= zoomX;
+				tanRight /= zoomX;
+				tanUp /= zoomY;
+				tanDown /= zoomY;
+			}
 			float cullFovX = 2.0f * atan( fmaxf( fabsf( tanLeft ), fabsf( tanRight ) ) * 1.2f ) * 180.0f / M_PI;
 			float cullFovY = 2.0f * atan( fmaxf( fabsf( tanUp ), fabsf( tanDown ) ) * 1.2f ) * 180.0f / M_PI;
 

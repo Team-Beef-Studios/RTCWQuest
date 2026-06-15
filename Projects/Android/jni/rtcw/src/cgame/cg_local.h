@@ -113,6 +113,7 @@ If you have questions concerning this license or the applicable additional terms
 #define HUD_FLAGS_STEREO				2
 #define HUD_FLAGS_MG42_CROSSHAIR		4
 #define HUD_ZOOMED_CROSSHAIR			8
+#define HUD_FLAGS_OPTICAL_CENTER		16
 
 #define CG_HUD_NORMAL	0
 #define CG_HUD_SCALED	1

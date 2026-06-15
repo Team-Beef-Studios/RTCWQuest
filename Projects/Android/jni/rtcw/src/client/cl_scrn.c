@@ -607,7 +607,8 @@ void SCR_UpdateScreen( void ) {
 		}
 
 		RTCWVR_finishEyeBuffer( 0 );
-	} else if ( !( vr_stereoReplay ? vr_stereoReplay->integer : ( vr_stereoReplay = Cvar_Get( "vr_stereoReplay", "0", CVAR_ARCHIVE ) )->integer ) ) {
+	} else if ( ( vr.binocularsActive || vr.scopeengaged || vr.cgzoommode ) ||
+				!( vr_stereoReplay ? vr_stereoReplay->integer : ( vr_stereoReplay = Cvar_Get( "vr_stereoReplay", "0", CVAR_ARCHIVE ) )->integer ) ) {
 		SCR_DrawDirectStereoFrame();
 	} else {
 		int eye;

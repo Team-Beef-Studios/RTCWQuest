@@ -720,9 +720,12 @@ static void Upload32(   unsigned *data,
 	float rMax = 0, gMax = 0, bMax = 0;
 	static int rmse_saved = 0;
 	float rmse;
+	qboolean preserveNpot;
 
-	// do the root mean square error stuff first
-	if ( r_rmse->value ) {
+	// do the root mean square error stuff first, but only when explicitly enabled.
+	// The old Android path reduced "perfect" low-RMSE images even with r_rmse 0,
+	// which can collapse menu/loading art to a visibly tiny source texture.
+	if ( r_rmse->value > 0.0f ) {
 		while ( R_RMSE( (byte *)data, width, height ) < r_rmse->value ) {
 			rmse_saved += ( height * width * 4 ) - ( ( width >> 1 ) * ( height >> 1 ) * 4 );
 			resampledBuffer = R_GetImageBuffer( ( width >> 1 ) * ( height >> 1 ) * 4, BUFFER_RESAMPLED );
@@ -732,30 +735,27 @@ static void Upload32(   unsigned *data,
 			height = height >> 1;
 			ri.Printf( PRINT_ALL, "r_rmse of %f has saved %dkb\n", r_rmse->value, ( rmse_saved / 1024 ) );
 		}
-	} else {
-		// just do the RMSE of 1 (reduce perfect)
-		while ( R_RMSE( (byte *)data, width, height ) < 1.0 ) {
-			rmse_saved += ( height * width * 4 ) - ( ( width >> 1 ) * ( height >> 1 ) * 4 );
-			resampledBuffer = R_GetImageBuffer( ( width >> 1 ) * ( height >> 1 ) * 4, BUFFER_RESAMPLED );
-			ResampleTexture( data, width, height, resampledBuffer, width >> 1, height >> 1 );
-			data = resampledBuffer;
-			width = width >> 1;
-			height = height >> 1;
-			ri.Printf( PRINT_ALL, "r_rmse of %f has saved %dkb\n", r_rmse->value, ( rmse_saved / 1024 ) );
-		}
 	}
+
+	preserveNpot = ( !mipmap && !picmip );
+
 	//
 	// convert to exact power of 2 sizes
 	//
-	for ( scaled_width = 1 ; scaled_width < width ; scaled_width <<= 1 )
-		;
-	for ( scaled_height = 1 ; scaled_height < height ; scaled_height <<= 1 )
-		;
-	if ( r_roundImagesDown->integer && scaled_width > width ) {
-		scaled_width >>= 1;
-	}
-	if ( r_roundImagesDown->integer && scaled_height > height ) {
-		scaled_height >>= 1;
+	if ( preserveNpot ) {
+		scaled_width = width;
+		scaled_height = height;
+	} else {
+		for ( scaled_width = 1 ; scaled_width < width ; scaled_width <<= 1 )
+			;
+		for ( scaled_height = 1 ; scaled_height < height ; scaled_height <<= 1 )
+			;
+		if ( r_roundImagesDown->integer && scaled_width > width ) {
+			scaled_width >>= 1;
+		}
+		if ( r_roundImagesDown->integer && scaled_height > height ) {
+			scaled_height >>= 1;
+		}
 	}
 
 	if ( scaled_width != width || scaled_height != height ) {
@@ -1060,8 +1060,6 @@ done:
 }
 
 
-
-//----(SA)	modified
 
 /*
 ================
