@@ -367,7 +367,7 @@ itemDef {
 		text "Cinematic:"
         type ITEM_TYPE_MULTI
         cvar "vr_cinematic_stereo"
-        cvarFloatList {"2D" 0 "3D" 1  }
+        cvarFloatList {"screen" 0 "immersive" 1  }
 		rect 82 30 290 12
       	textalign ITEM_ALIGN_RIGHT
       	textalignx 142
