@@ -217,6 +217,24 @@ static void CG_CalcVrect( void ) {
 	}
 	// -NERVE - SMF
 
+	int vr_cinematic_stereo = trap_Cvar_VariableIntegerValue("vr_cinematic_stereo");
+
+    if ( cg.cameraMode && !vr_cinematic_stereo ) {
+        float x = 192;
+        float y = 150;
+        float w = 256;
+        float h = 144;
+
+        cg.refdef.width = 0;
+        CG_AdjustFrom640( &x, &y, &w, &h );
+
+        cg.refdef.x = x;
+        cg.refdef.y = y;
+        cg.refdef.width = w;
+        cg.refdef.height = h;
+        return;
+    }
+
 	// the intermission should allways be full screen
 	if ( cg.snap->ps.pm_type == PM_INTERMISSION ) {
 		xsize = ysize = 100;
@@ -1108,11 +1126,13 @@ static int CG_CalcViewValues( void ) {
 			angles[PITCH] = -angles[PITCH];     // (SA) compensate for reversed pitch (this makes the game match the editor, however I'm guessing the real fix is to be done there)
 			VectorCopy( angles, cg.refdefViewAngles );
 
-			if ( cgVR && !cgVR->screen ) {
-				cg.refdefViewAngles[PITCH] = cgVR->hmdorientation[PITCH];
-				cg.refdefViewAngles[YAW] += AngleSubtract( cgVR->hmdorientation[YAW], cameraHmdBaseAngles[YAW] );
-				cg.refdefViewAngles[ROLL] = cgVR->hmdorientation[ROLL];
-			}
+            int vr_cinematic_stereo = trap_Cvar_VariableIntegerValue("vr_cinematic_stereo");
+
+            if ( cgVR && !cgVR->screen && vr_cinematic_stereo ) {
+                cg.refdefViewAngles[PITCH] = cgVR->hmdorientation[PITCH];
+                cg.refdefViewAngles[YAW] += AngleSubtract( cgVR->hmdorientation[YAW], cameraHmdBaseAngles[YAW] );
+                cg.refdefViewAngles[ROLL] = cgVR->hmdorientation[ROLL];
+            }
 
 			AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
 
