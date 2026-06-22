@@ -3612,10 +3612,31 @@ void CG_LaserSight(const playerState_t *ps, qboolean akimbo) {
 			VectorMA(origin, 8192, forward, endForward);
 			trap_CM_BoxTrace(&trace, origin, endForward, NULL, NULL, 0, MASK_SOLID);
 
-			ci.health = 1;
-			ci.handicap = 96; // value out of 255 for  alpha channel
-			VectorSet(ci.color, 1, 0, 0);
-			CG_RailTrail2(&ci, origin, trace.endpos);
+            if (trap_Cvar_VariableIntegerValue("vr_lasersight") == 2) {
+
+                refEntity_t ent;
+                memset(&ent, 0, sizeof(ent));
+
+                ent.reType = RT_SPRITE;
+                ent.radius = 1.5f;
+                ent.customShader = cgs.media.laserDotShader;
+
+                VectorMA(trace.endpos, 1.5f, trace.plane.normal, ent.origin);
+
+                ent.shaderRGBA[0] = 255;
+                ent.shaderRGBA[1] = 0;
+                ent.shaderRGBA[2] = 0;
+                ent.shaderRGBA[3] = 255;
+
+                trap_R_AddRefEntityToScene(&ent);
+
+            } else {
+
+                ci.health = 1;
+                ci.handicap = 96; // value out of 255 for  alpha channel
+                VectorSet(ci.color, 1, 0, 0);
+                CG_RailTrail2(&ci, origin, trace.endpos);
+            }
 		}
 	}
 }

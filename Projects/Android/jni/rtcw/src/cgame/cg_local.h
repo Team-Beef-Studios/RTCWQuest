@@ -1042,6 +1042,7 @@ typedef struct {
 	qhandle_t charsetPropGlow;
 	qhandle_t charsetPropB;
 	qhandle_t whiteShader;
+    qhandle_t laserDotShader;
 
 	qhandle_t redFlagModel;
 	qhandle_t blueFlagModel;

@@ -3778,7 +3778,13 @@ void CG_DrawActive( int stereoView ) {
 		return;
 	}
 
-	cg.refdef.stereoView = stereoView;
+    int vr_cinematic_stereo = trap_Cvar_VariableIntegerValue("vr_cinematic_stereo");
+
+    if ( cg.cameraMode && !vr_cinematic_stereo ) {
+        cg.refdef.stereoView = STEREO_CENTER;
+    } else {
+        cg.refdef.stereoView = stereoView;
+    }
 	separation = 0.0f;
 
     cg.refdef.worldscale = cg_worldScale.value;
@@ -3790,7 +3796,7 @@ void CG_DrawActive( int stereoView ) {
 	// offset vieworg appropriately if we're doing stereo separation
 	VectorCopy( cg.refdef.vieworg, baseOrg );
 
-	int vr_cinematic_stereo = trap_Cvar_VariableIntegerValue( "vr_cinematic_stereo");
+	vr_cinematic_stereo = trap_Cvar_VariableIntegerValue( "vr_cinematic_stereo");
 	if ( !cgVR->scopeengaged &&
 		(!cg.cameraMode || (cg.cameraMode && vr_cinematic_stereo)))
 	{
